@@ -20,7 +20,7 @@ export class LocustCdkFargateStack extends cdk.Stack {
     });
 
     // Setup a Service Discovery Namespace to the Fargate cluster
-    const privateDomainName = 'tarragon.local'
+    const privateDomainName = 'locust.local'
     cluster.addDefaultCloudMapNamespace({
       name: privateDomainName
     })
