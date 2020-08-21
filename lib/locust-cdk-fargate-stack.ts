@@ -19,6 +19,12 @@ export class LocustCdkFargateStack extends cdk.Stack {
       vpc: vpc,
     });
 
+    // Setup a Service Discovery Namespace to the Fargate cluster
+    const privateDomainName = 'tarragon.local'
+    cluster.addDefaultCloudMapNamespace({
+      name: privateDomainName
+    })
+
     // Task Definition(s)
     const master_taskDefinition = new ecs.FargateTaskDefinition(this, 'LocustMasterTaskDefinition', {
       memoryLimitMiB: 8192,
@@ -40,13 +46,14 @@ export class LocustCdkFargateStack extends cdk.Stack {
 
     const slave_container = slave_taskDefinition.addContainer('LocustMasterContainer', {
       image: ecs.ContainerImage.fromAsset(path.join(__dirname, '..', 'locust-container')),
-      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'LocustMasterCdkFargate' }),
-      command: ["--worker", "--master-host", "Locus-Locus-1WBDLX22YR0YR-754097508.us-east-2.elb.amazonaws.com"],
+      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'LocustSlaveCdkFargate' }),
+      command: ["--worker", "--master-host", "master.locust.local"],
     });
     // Add port to container definition
     slave_container.addPortMappings({containerPort: 8089});
 
     // Setup Locust Master service
+    const privateMasterServiceName = 'master'
     const masterloadBalancedFargateService = new ecs_patterns.ApplicationLoadBalancedFargateService(this, 'LocustMaster', {
       platformVersion: ecs.FargatePlatformVersion.VERSION1_4,
       cluster,
@@ -54,9 +61,13 @@ export class LocustCdkFargateStack extends cdk.Stack {
       cpu: 4096,
       desiredCount: 1,
       taskDefinition: master_taskDefinition,
+      cloudMapOptions: {
+        name: privateMasterServiceName
+      },
     });
 
     // Setup Locust Slave service
+    const privateSlaveServiceName = 'slave'
     const slaveloadBalancedFargateService = new ecs_patterns.ApplicationLoadBalancedFargateService(this, 'LocustSlaves', {
       platformVersion: ecs.FargatePlatformVersion.VERSION1_4,
       cluster,
@@ -64,6 +75,9 @@ export class LocustCdkFargateStack extends cdk.Stack {
       cpu: 4096,
       desiredCount: 2,
       taskDefinition: slave_taskDefinition,
+      cloudMapOptions: {
+        name: privateSlaveServiceName
+      },
     });
 
   }
