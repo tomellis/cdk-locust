@@ -78,6 +78,7 @@ export class LocustCdkFargateStack extends cdk.Stack {
       cloudMapOptions: {
         name: privateSlaveServiceName
       },
+      publicLoadBalancer: false,
     });
 
   }
