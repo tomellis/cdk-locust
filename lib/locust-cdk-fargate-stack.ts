@@ -19,27 +19,51 @@ export class LocustCdkFargateStack extends cdk.Stack {
       vpc: vpc,
     });
 
-    // Task Definition
-    const taskDefinition = new ecs.FargateTaskDefinition(this, 'LocustTaskDefinition', {
+    // Task Definition(s)
+    const master_taskDefinition = new ecs.FargateTaskDefinition(this, 'LocustMasterTaskDefinition', {
       memoryLimitMiB: 8192,
       cpu: 4096
     });
 
-    // Build and define the Container
-    const container = taskDefinition.addContainer('LocustContainer', {
+    const master_container = master_taskDefinition.addContainer('LocustMasterContainer', {
       image: ecs.ContainerImage.fromAsset(path.join(__dirname, '..', 'locust-container')),
-      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'LocustCdkFargate' }),
-      environment: {'TARGET_URL': '127.0.0.1'}
+      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'LocustMasterCdkFargate' }),
+      command: ["--master"],
     });
     // Add port to container definition
-    container.addPortMappings({containerPort: 8089});
+    master_container.addPortMappings({containerPort: 8089});
 
-    // Setup service
-    const loadBalancedFargateService = new ecs_patterns.ApplicationLoadBalancedFargateService(this, 'Locust', {
+    const slave_taskDefinition = new ecs.FargateTaskDefinition(this, 'LocustSlaveTaskDefinition', {
+      memoryLimitMiB: 8192,
+      cpu: 4096
+    });
+
+    const slave_container = slave_taskDefinition.addContainer('LocustMasterContainer', {
+      image: ecs.ContainerImage.fromAsset(path.join(__dirname, '..', 'locust-container')),
+      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'LocustMasterCdkFargate' }),
+      command: ["--worker", "--master-host", "Locus-Locus-1WBDLX22YR0YR-754097508.us-east-2.elb.amazonaws.com"],
+    });
+    // Add port to container definition
+    slave_container.addPortMappings({containerPort: 8089});
+
+    // Setup Locust Master service
+    const masterloadBalancedFargateService = new ecs_patterns.ApplicationLoadBalancedFargateService(this, 'LocustMaster', {
+      platformVersion: ecs.FargatePlatformVersion.VERSION1_4,
       cluster,
       memoryLimitMiB: 8192,
       cpu: 4096,
-      taskDefinition: taskDefinition
+      desiredCount: 1,
+      taskDefinition: master_taskDefinition,
+    });
+
+    // Setup Locust Slave service
+    const slaveloadBalancedFargateService = new ecs_patterns.ApplicationLoadBalancedFargateService(this, 'LocustSlaves', {
+      platformVersion: ecs.FargatePlatformVersion.VERSION1_4,
+      cluster,
+      memoryLimitMiB: 8192,
+      cpu: 4096,
+      desiredCount: 2,
+      taskDefinition: slave_taskDefinition,
     });
 
   }
