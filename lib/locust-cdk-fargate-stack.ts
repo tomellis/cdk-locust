@@ -38,6 +38,8 @@ export class LocustCdkFargateStack extends cdk.Stack {
     });
     // Add port to container definition
     master_container.addPortMappings({containerPort: 8089});
+    master_container.addPortMappings({containerPort: 5557});
+    master_container.addPortMappings({containerPort: 5558});
 
     const slave_taskDefinition = new ecs.FargateTaskDefinition(this, 'LocustSlaveTaskDefinition', {
       memoryLimitMiB: 8192,
@@ -53,6 +55,8 @@ export class LocustCdkFargateStack extends cdk.Stack {
     slave_container.addPortMappings({containerPort: 8089});
 
     // Setup Locust Master service
+    //// Exposes a web interfacve on port 8089
+    //// Slaves join on 5557 & 5558
     const privateMasterServiceName = 'master'
     const masterloadBalancedFargateService = new ecs_patterns.ApplicationLoadBalancedFargateService(this, 'LocustMaster', {
       platformVersion: ecs.FargatePlatformVersion.VERSION1_4,
@@ -66,19 +70,19 @@ export class LocustCdkFargateStack extends cdk.Stack {
       },
     });
 
-    // Setup Locust Slave service
+    // Setup Locust Slave service - no load balancer required
     const privateSlaveServiceName = 'slave'
-    const slaveloadBalancedFargateService = new ecs_patterns.ApplicationLoadBalancedFargateService(this, 'LocustSlaves', {
+    const slaveFargateService = new ecs.FargateService(this, "LocustSlaves", {
       platformVersion: ecs.FargatePlatformVersion.VERSION1_4,
-      cluster,
-      memoryLimitMiB: 8192,
-      cpu: 4096,
-      desiredCount: 2,
+      cluster: cluster,
+      //memoryLimitMiB: 8192,
+      //cpu: 4096,
       taskDefinition: slave_taskDefinition,
+      desiredCount: 2,
+      assignPublicIp: false,
       cloudMapOptions: {
         name: privateSlaveServiceName
       },
-      publicLoadBalancer: false,
     });
 
   }
