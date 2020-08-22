@@ -53,6 +53,8 @@ export class LocustCdkFargateStack extends cdk.Stack {
     });
     // Add port to container definition
     slave_container.addPortMappings({containerPort: 8089});
+    slave_container.addPortMappings({containerPort: 5557});
+    slave_container.addPortMappings({containerPort: 5558});
 
     // Setup Locust Master service
     //// Exposes a web interfacve on port 8089
@@ -65,25 +67,44 @@ export class LocustCdkFargateStack extends cdk.Stack {
       cpu: 4096,
       desiredCount: 1,
       taskDefinition: master_taskDefinition,
+      openListener: false, // disable public acccess and add private access below, set to true if you want to be able to access
       cloudMapOptions: {
         name: privateMasterServiceName
       },
     });
 
-    // Setup Locust Slave service - no load balancer required
+    // Allow the Locust Master WebUI to be accessible only from our private IP addresses (precreated prefix list)
+    masterloadBalancedFargateService.listener.connections.securityGroups[0].addIngressRule(
+      ec2.Peer.prefixList('pl-00d10045486f5dcfc'),
+      ec2.Port.tcp(80),
+      "Allow access to ALB from my private IP addresses"
+    );
+
+    // We have port 8089 exposed on the LB but also want our slaves to access 5557/5558
+    masterloadBalancedFargateService.service.connections.securityGroups[0].addIngressRule(
+      ec2.Peer.ipv4(vpc.vpcCidrBlock),
+      ec2.Port.tcpRange(5557, 5558),
+      "Allow Locust slaves to master connections"
+    );
+
+    // Locust Slave Service - no ALB requried
     const privateSlaveServiceName = 'slave'
     const slaveFargateService = new ecs.FargateService(this, "LocustSlaves", {
       platformVersion: ecs.FargatePlatformVersion.VERSION1_4,
       cluster: cluster,
-      //memoryLimitMiB: 8192,
-      //cpu: 4096,
       taskDefinition: slave_taskDefinition,
-      desiredCount: 2,
+      desiredCount: 10,
       assignPublicIp: false,
       cloudMapOptions: {
         name: privateSlaveServiceName
       },
     });
+
+    slaveFargateService.connections.securityGroups[0].addIngressRule(
+      ec2.Peer.ipv4(vpc.vpcCidrBlock),
+      ec2.Port.tcpRange(5557, 5558),
+      "Allow Locust master to slaves connections"
+    );
 
   }
 }
