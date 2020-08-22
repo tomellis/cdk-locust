@@ -56,6 +56,13 @@ export class LocustCdkFargateStack extends cdk.Stack {
     slave_container.addPortMappings({containerPort: 5557});
     slave_container.addPortMappings({containerPort: 5558});
 
+    // Increase Number of Open file ulimits
+    slave_container.addUlimits({
+      name: ecs.UlimitName.NOFILE,
+      softLimit: 65535,
+      hardLimit: 65535,
+    });
+
     // Setup Locust Master service
     //// Exposes a web interfacve on port 8089
     //// Slaves join on 5557 & 5558
