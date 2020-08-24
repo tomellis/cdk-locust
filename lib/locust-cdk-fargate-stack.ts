@@ -64,8 +64,6 @@ export class LocustCdkFargateStack extends cdk.Stack {
     });
 
     // Setup Locust Master service
-    //// Exposes a web interfacve on port 8089
-    //// Slaves join on 5557 & 5558
     const privateMasterServiceName = 'master'
     const masterloadBalancedFargateService = new ecs_patterns.ApplicationLoadBalancedFargateService(this, 'LocustMaster', {
       platformVersion: ecs.FargatePlatformVersion.VERSION1_4,
@@ -74,18 +72,18 @@ export class LocustCdkFargateStack extends cdk.Stack {
       cpu: 4096,
       desiredCount: 1,
       taskDefinition: master_taskDefinition,
-      openListener: false, // disable public acccess and add private access below, set to true if you want to be able to access
+      openListener: true, // to disable public acccess, set to false and add private access below
       cloudMapOptions: {
         name: privateMasterServiceName
       },
     });
 
     // Allow the Locust Master WebUI to be accessible only from our private IP addresses (precreated prefix list)
-    masterloadBalancedFargateService.listener.connections.securityGroups[0].addIngressRule(
-      ec2.Peer.prefixList('pl-00d10045486f5dcfc'),
-      ec2.Port.tcp(80),
-      "Allow access to ALB from my private IP addresses"
-    );
+    //masterloadBalancedFargateService.listener.connections.securityGroups[0].addIngressRule(
+    //  ec2.Peer.prefixList('pl-00d10045486f5dcfc'),
+    //  ec2.Port.tcp(80),
+    //  "Allow access to ALB from my private IP addresses"
+    //);
 
     // We have port 8089 exposed on the LB but also want our slaves to access 5557/5558
     masterloadBalancedFargateService.service.connections.securityGroups[0].addIngressRule(
