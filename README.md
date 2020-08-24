@@ -12,6 +12,10 @@ The this will deploy:
  * AWS CloudMap - for service discovery between primary and workers
  * Locust Containers - built as an asset by CDK from the DockerHub container and stored in ECR
 
+## Architecture Diagram
+
+![Architecture Diagram](images/cdk-locust.png "Architecture Diagram")
+
 ## Requirements
 
  * Install [AWS CDK](https://aws.amazon.com/cdk/)
