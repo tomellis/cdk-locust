@@ -26,89 +26,89 @@ export class LocustCdkFargateStack extends cdk.Stack {
     })
 
     // Task Definition(s)
-    const master_taskDefinition = new ecs.FargateTaskDefinition(this, 'LocustMasterTaskDefinition', {
+    const primary_taskDefinition = new ecs.FargateTaskDefinition(this, 'LocustPrimaryTaskDefinition', {
       memoryLimitMiB: 8192,
       cpu: 4096
     });
 
-    const master_container = master_taskDefinition.addContainer('LocustMasterContainer', {
+    const primary_container = primary_taskDefinition.addContainer('LocustPrimaryContainer', {
       image: ecs.ContainerImage.fromAsset(path.join(__dirname, '..', 'locust-container')),
-      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'LocustMasterCdkFargate' }),
+      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'LocustPrimaryCdkFargate' }),
       command: ["--master"],
     });
     // Add port to container definition
-    master_container.addPortMappings({containerPort: 8089});
-    master_container.addPortMappings({containerPort: 5557});
-    master_container.addPortMappings({containerPort: 5558});
+    primary_container.addPortMappings({containerPort: 8089});
+    primary_container.addPortMappings({containerPort: 5557});
+    primary_container.addPortMappings({containerPort: 5558});
 
-    const slave_taskDefinition = new ecs.FargateTaskDefinition(this, 'LocustSlaveTaskDefinition', {
+    const worker_taskDefinition = new ecs.FargateTaskDefinition(this, 'LocustWorkerTaskDefinition', {
       memoryLimitMiB: 8192,
       cpu: 4096
     });
 
-    const slave_container = slave_taskDefinition.addContainer('LocustMasterContainer', {
+    const worker_container = worker_taskDefinition.addContainer('LocustPrimaryContainer', {
       image: ecs.ContainerImage.fromAsset(path.join(__dirname, '..', 'locust-container')),
-      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'LocustSlaveCdkFargate' }),
-      command: ["--worker", "--master-host", "master.locust.local"],
+      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'LocustWorkerCdkFargate' }),
+      command: ["--worker", "--master-host", "primary.locust.local"],
     });
     // Add port to container definition
-    slave_container.addPortMappings({containerPort: 8089});
-    slave_container.addPortMappings({containerPort: 5557});
-    slave_container.addPortMappings({containerPort: 5558});
+    worker_container.addPortMappings({containerPort: 8089});
+    worker_container.addPortMappings({containerPort: 5557});
+    worker_container.addPortMappings({containerPort: 5558});
 
     // Increase Number of Open file ulimits
-    slave_container.addUlimits({
+    worker_container.addUlimits({
       name: ecs.UlimitName.NOFILE,
       softLimit: 65535,
       hardLimit: 65535,
     });
 
-    // Setup Locust Master service
-    const privateMasterServiceName = 'master'
-    const masterloadBalancedFargateService = new ecs_patterns.ApplicationLoadBalancedFargateService(this, 'LocustMaster', {
+    // Setup Locust Primary service
+    const privatePrimaryServiceName = 'primary'
+    const primaryloadBalancedFargateService = new ecs_patterns.ApplicationLoadBalancedFargateService(this, 'LocustPrimary', {
       platformVersion: ecs.FargatePlatformVersion.VERSION1_4,
       cluster,
       memoryLimitMiB: 8192,
       cpu: 4096,
       desiredCount: 1,
-      taskDefinition: master_taskDefinition,
+      taskDefinition: primary_taskDefinition,
       openListener: true, // to disable public acccess, set to false and add private access below
       cloudMapOptions: {
-        name: privateMasterServiceName
+        name: privatePrimaryServiceName
       },
     });
 
-    // Allow the Locust Master WebUI to be accessible only from our private IP addresses (precreated prefix list)
-    //masterloadBalancedFargateService.listener.connections.securityGroups[0].addIngressRule(
+    // Allow the Locust Primary WebUI to be accessible only from our private IP addresses (precreated prefix list)
+    //primaryloadBalancedFargateService.listener.connections.securityGroups[0].addIngressRule(
     //  ec2.Peer.prefixList('pl-00d10045486f5dcfc'),
     //  ec2.Port.tcp(80),
     //  "Allow access to ALB from my private IP addresses"
     //);
 
-    // We have port 8089 exposed on the LB but also want our slaves to access 5557/5558
-    masterloadBalancedFargateService.service.connections.securityGroups[0].addIngressRule(
+    // We have port 8089 exposed on the LB but also want our workers to access 5557/5558
+    primaryloadBalancedFargateService.service.connections.securityGroups[0].addIngressRule(
       ec2.Peer.ipv4(vpc.vpcCidrBlock),
       ec2.Port.tcpRange(5557, 5558),
-      "Allow Locust slaves to master connections"
+      "Allow Locust workers to primary connections"
     );
 
-    // Locust Slave Service - no ALB requried
-    const privateSlaveServiceName = 'slave'
-    const slaveFargateService = new ecs.FargateService(this, "LocustSlaves", {
+    // Locust Worker Service - no ALB requried
+    const privateWorkerServiceName = 'worker'
+    const workerFargateService = new ecs.FargateService(this, "LocustWorkers", {
       platformVersion: ecs.FargatePlatformVersion.VERSION1_4,
       cluster: cluster,
-      taskDefinition: slave_taskDefinition,
+      taskDefinition: worker_taskDefinition,
       desiredCount: 10,
       assignPublicIp: false,
       cloudMapOptions: {
-        name: privateSlaveServiceName
+        name: privateWorkerServiceName
       },
     });
 
-    slaveFargateService.connections.securityGroups[0].addIngressRule(
+    workerFargateService.connections.securityGroups[0].addIngressRule(
       ec2.Peer.ipv4(vpc.vpcCidrBlock),
       ec2.Port.tcpRange(5557, 5558),
-      "Allow Locust master to slaves connections"
+      "Allow Locust primary to workers connections"
     );
 
   }
