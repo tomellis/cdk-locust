@@ -30,4 +30,5 @@ The this will deploy:
  * `npm run build`   compile typescript to js
  * `cdk synth`       emits the synthesized CloudFormation template
  * `cdk deploy`      deploy this stack to your default AWS account/region
- * `cdk deploy` --require-approval never    deploy the stack without cli nagging you to approve
+ * `cdk deploy --require-approval never`    deploy the stack without cli nagging you to approve
+ * Customise by adding your Locust tests to `locust-container/locustfile.py` and these will be added to the container on build
